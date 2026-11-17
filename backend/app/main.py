@@ -52,6 +52,8 @@ def health_check():
 
 # Check for compiled frontend dist directory
 possible_dist_paths = [
+    os.path.join(os.path.dirname(__file__), "..", "static"),
+    os.path.join(os.getcwd(), "static"),
     os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist"),
     os.path.join(os.getcwd(), "frontend", "dist"),
     os.path.join(os.getcwd(), "dist"),
