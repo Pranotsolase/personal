@@ -178,22 +178,37 @@ def get_dashboard_data(
             "is_exceeded": pct >= 100.0
         }
 
-    # Upcoming & Pending receivables
+    # Upcoming & Pending receivables and payables
     pending_dues = db.query(UpcomingDue).filter(
         UpcomingDue.user_id == current_user.id,
         UpcomingDue.status.in_(["PENDING", "PARTIAL"])
     ).all()
-    pending_incoming_amount = round(sum(max(0.0, d.amount - (d.amount_received or 0.0)) for d in pending_dues), 2)
-    pending_incoming_count = len(pending_dues)
-    overdue_dues = [d for d in pending_dues if d.due_date < today]
-    overdue_incoming_amount = round(sum(max(0.0, d.amount - (d.amount_received or 0.0)) for d in overdue_dues), 2)
+
+    receivables = [d for d in pending_dues if getattr(d, "due_type", "RECEIVABLE") == "RECEIVABLE"]
+    payables = [d for d in pending_dues if getattr(d, "due_type", "RECEIVABLE") == "PAYABLE"]
+
+    pending_incoming_amount = round(sum(max(0.0, d.amount - (d.amount_received or 0.0)) for d in receivables), 2)
+    pending_incoming_count = len(receivables)
+    overdue_receivables = [d for d in receivables if d.due_date < today]
+    overdue_incoming_amount = round(sum(max(0.0, d.amount - (d.amount_received or 0.0)) for d in overdue_receivables), 2)
+
+    pending_payable_amount = round(sum(max(0.0, d.amount - (d.amount_received or 0.0)) for d in payables), 2)
+    pending_payable_count = len(payables)
+    overdue_payables = [d for d in payables if d.due_date < today]
+    overdue_payable_amount = round(sum(max(0.0, d.amount - (d.amount_received or 0.0)) for d in overdue_payables), 2)
 
     # Generate smart financial insights
     insights = []
-    if overdue_dues:
-        first_overdue = overdue_dues[0]
-        insights.append(f"⚠️ Overdue Alert: ₹{max(0.0, first_overdue.amount - (first_overdue.amount_received or 0.0)):,.2f} is overdue from {first_overdue.person_name}.")
-    elif pending_dues:
+    if overdue_payables:
+        first_op = overdue_payables[0]
+        insights.append(f"⚠️ Overdue Payment: ₹{max(0.0, first_op.amount - (first_op.amount_received or 0.0)):,.2f} is overdue to transfer to {first_op.person_name}.")
+    elif pending_payables:
+        insights.append(f"Pending Transfers: You have ₹{pending_payable_amount:,.2f} pending to transfer to {pending_payable_count} {'person' if pending_payable_count == 1 else 'people'}.")
+
+    if overdue_receivables:
+        first_overdue = overdue_receivables[0]
+        insights.append(f"⚠️ Overdue Collection: ₹{max(0.0, first_overdue.amount - (first_overdue.amount_received or 0.0)):,.2f} is overdue from {first_overdue.person_name}.")
+    elif receivables:
         insights.append(f"Upcoming Money: You have ₹{pending_incoming_amount:,.2f} pending to collect from {pending_incoming_count} {'person' if pending_incoming_count == 1 else 'people'}.")
 
     if highest_cat != "None" and highest_cat_amount > 0:

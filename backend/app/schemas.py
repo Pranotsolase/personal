@@ -253,6 +253,7 @@ class DashboardOverview(BaseModel):
 # --- Upcoming Due Schemas ---
 class UpcomingDueBase(BaseModel):
     person_name: str
+    due_type: str = "RECEIVABLE"  # "RECEIVABLE" or "PAYABLE"
     amount: float = Field(..., gt=0)
     due_date: Optional[datetime.date] = None
     description: Optional[str] = None
@@ -265,6 +266,7 @@ class UpcomingDueCreate(UpcomingDueBase):
 
 class UpcomingDueUpdate(BaseModel):
     person_name: Optional[str] = None
+    due_type: Optional[str] = None
     amount: Optional[float] = Field(None, gt=0)
     due_date: Optional[datetime.date] = None
     description: Optional[str] = None
@@ -282,6 +284,7 @@ class UpcomingDueSettle(BaseModel):
 
 class UpcomingDueResponse(UpcomingDueBase):
     id: int
+    due_type: str = "RECEIVABLE"
     amount_received: float = 0.0
     status: str
     received_date: Optional[datetime.date] = None
@@ -298,10 +301,16 @@ class UpcomingDueResponse(UpcomingDueBase):
         from_attributes = True
 
 class UpcomingDueSummary(BaseModel):
-    total_pending_amount: float
-    total_pending_count: int
-    overdue_amount: float
-    overdue_count: int
-    received_this_month_amount: float
-    received_this_month_count: int
+    total_pending_amount: float = 0.0
+    total_pending_count: int = 0
+    overdue_amount: float = 0.0
+    overdue_count: int = 0
+    received_this_month_amount: float = 0.0
+    received_this_month_count: int = 0
+    total_payable_amount: float = 0.0
+    total_payable_count: int = 0
+    overdue_payable_amount: float = 0.0
+    overdue_payable_count: int = 0
+    paid_this_month_amount: float = 0.0
+    paid_this_month_count: int = 0
 

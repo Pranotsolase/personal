@@ -153,6 +153,7 @@ class UpcomingDue(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     person_id = Column(Integer, ForeignKey("people.id", ondelete="SET NULL"), nullable=True, index=True)
     person_name = Column(String(100), nullable=False)
+    due_type = Column(String(20), default="RECEIVABLE", index=True)  # RECEIVABLE or PAYABLE
     amount = Column(Float, nullable=False)
     amount_received = Column(Float, default=0.0, nullable=False)
     due_date = Column(Date, nullable=False, default=datetime.date.today, index=True)

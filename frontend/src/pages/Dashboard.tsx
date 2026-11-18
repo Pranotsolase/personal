@@ -119,7 +119,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-extrabold text-slate-900 text-sm">
-                  Upcoming Money: {formatCurrency(s.pending_incoming_amount)}
+                  Upcoming Money to Collect: {formatCurrency(s.pending_incoming_amount)}
                 </span>
                 {s.overdue_incoming_amount ? (
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-200 animate-pulse">
@@ -137,6 +137,39 @@ export const Dashboard: React.FC<DashboardProps> = ({
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition shadow-xs cursor-pointer self-start sm:self-auto shrink-0 active:scale-98"
           >
             <span>View & Collect</span>
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Pending Transfers To Others Banner */}
+      {s?.pending_payable_amount !== undefined && s.pending_payable_amount > 0 && (
+        <div className="bg-gradient-to-r from-rose-500/10 via-orange-400/15 to-rose-500/10 border border-rose-200 rounded-2xl p-3.5 sm:p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-start sm:items-center space-x-3">
+            <div className="p-2.5 rounded-xl bg-rose-600 text-white shrink-0 shadow-xs">
+              <ArrowUpRight className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-extrabold text-slate-900 text-sm">
+                  Pending Transfers to Others: {formatCurrency(s.pending_payable_amount)}
+                </span>
+                {s.overdue_payable_amount ? (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-200 animate-pulse">
+                    {formatCurrency(s.overdue_payable_amount)} Overdue
+                  </span>
+                ) : null}
+              </div>
+              <p className="text-xs text-slate-600 mt-0.5">
+                You have {s.pending_payable_count || 1} pending payment{(s.pending_payable_count || 1) === 1 ? '' : 's'} to transfer to contacts.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => onNavigateTab('upcoming-money')}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition shadow-xs cursor-pointer self-start sm:self-auto shrink-0 active:scale-98"
+          >
+            <span>View & Pay</span>
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>

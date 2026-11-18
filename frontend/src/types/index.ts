@@ -130,6 +130,9 @@ export interface DashboardData {
     pending_incoming_amount?: number;
     pending_incoming_count?: number;
     overdue_incoming_amount?: number;
+    pending_payable_amount?: number;
+    pending_payable_count?: number;
+    overdue_payable_amount?: number;
   };
   insights: string[];
   charts: {
@@ -142,6 +145,7 @@ export interface DashboardData {
 export interface UpcomingDue {
   id: number;
   person_name: string;
+  due_type: 'RECEIVABLE' | 'PAYABLE';
   amount: number;
   amount_received: number;
   due_date: string;
@@ -150,7 +154,7 @@ export interface UpcomingDue {
   category_id?: number;
   category_name?: string;
   notes?: string;
-  status: 'PENDING' | 'PARTIAL' | 'RECEIVED' | 'CANCELLED';
+  status: 'PENDING' | 'PARTIAL' | 'RECEIVED' | 'PAID' | 'CANCELLED';
   received_date?: string;
   settled_bank_id?: number;
   settled_bank_name?: string;
@@ -168,4 +172,10 @@ export interface UpcomingDueSummary {
   overdue_count: number;
   received_this_month_amount: number;
   received_this_month_count: number;
+  total_payable_amount?: number;
+  total_payable_count?: number;
+  overdue_payable_amount?: number;
+  overdue_payable_count?: number;
+  paid_this_month_amount?: number;
+  paid_this_month_count?: number;
 }

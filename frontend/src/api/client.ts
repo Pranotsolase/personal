@@ -135,9 +135,10 @@ export const getReports = (params: {
   month?: number;
 }) => api.get('/analytics/reports', { params }).then((r) => r.data);
 
-// Upcoming Money (Pending from others) API
+// Upcoming & Pending Money API (Both Receivables and Payables)
 export const getUpcomingDues = (params?: {
   status?: string;
+  due_type?: string;
   is_overdue?: boolean;
   search?: string;
 }) => api.get<UpcomingDue[]>('/upcoming/', { params }).then((r) => r.data);
@@ -148,6 +149,7 @@ export const getUpcomingSummary = () =>
 export const createUpcomingDue = (data: {
   person_name: string;
   amount: number;
+  due_type?: 'RECEIVABLE' | 'PAYABLE';
   due_date?: string;
   description?: string;
   person_id?: number;

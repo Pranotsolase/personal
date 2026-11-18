@@ -22,10 +22,12 @@ def format_due_response(due: UpcomingDue) -> UpcomingDueResponse:
     today = datetime.date.today()
     remaining = max(0.0, round(due.amount - (due.amount_received or 0.0), 2))
     is_overdue = (due.status in ["PENDING", "PARTIAL"]) and (due.due_date < today)
+    due_type = getattr(due, "due_type", "RECEIVABLE") or "RECEIVABLE"
     
     return UpcomingDueResponse(
         id=due.id,
         person_name=due.person_name,
+        due_type=due_type,
         amount=due.amount,
         amount_received=due.amount_received or 0.0,
         due_date=due.due_date,
@@ -49,6 +51,7 @@ def format_due_response(due: UpcomingDue) -> UpcomingDueResponse:
 @router.get("/", response_model=List[UpcomingDueResponse])
 def get_upcoming_dues(
     status_filter: Optional[str] = Query(None, alias="status"),
+    due_type_filter: Optional[str] = Query(None, alias="due_type"),
     is_overdue: Optional[bool] = Query(None),
     search: Optional[str] = Query(None),
     db: Session = Depends(get_db),
@@ -56,6 +59,9 @@ def get_upcoming_dues(
 ):
     query = db.query(UpcomingDue).filter(UpcomingDue.user_id == current_user.id)
     today = datetime.date.today()
+
+    if due_type_filter and due_type_filter.upper() != "ALL":
+        query = query.filter(UpcomingDue.due_type == due_type_filter.upper())
 
     if status_filter and status_filter.upper() != "ALL":
         query = query.filter(UpcomingDue.status == status_filter.upper())
@@ -68,7 +74,7 @@ def get_upcoming_dues(
     elif is_overdue is False:
         query = query.filter(
             or_(
-                UpcomingDue.status == "RECEIVED",
+                UpcomingDue.status.in_(["RECEIVED", "PAID"]),
                 UpcomingDue.due_date >= today
             )
         )
@@ -104,18 +110,39 @@ def get_upcoming_summary(
     received_this_month_amount = 0.0
     received_this_month_count = 0
 
+    total_payable_amount = 0.0
+    total_payable_count = 0
+    overdue_payable_amount = 0.0
+    overdue_payable_count = 0
+    paid_this_month_amount = 0.0
+    paid_this_month_count = 0
+
     for d in all_dues:
         rem = max(0.0, d.amount - (d.amount_received or 0.0))
-        if d.status in ["PENDING", "PARTIAL"]:
-            total_pending_amount += rem
-            total_pending_count += 1
-            if d.due_date < today:
-                overdue_amount += rem
-                overdue_count += 1
-        elif d.status == "RECEIVED" or (d.amount_received and d.amount_received > 0):
-            if d.received_date and d.received_date >= first_this_month:
-                received_this_month_amount += (d.amount_received or d.amount)
-                received_this_month_count += 1
+        dtype = getattr(d, "due_type", "RECEIVABLE") or "RECEIVABLE"
+
+        if dtype == "RECEIVABLE":
+            if d.status in ["PENDING", "PARTIAL"]:
+                total_pending_amount += rem
+                total_pending_count += 1
+                if d.due_date < today:
+                    overdue_amount += rem
+                    overdue_count += 1
+            elif d.status in ["RECEIVED", "SETTLED"] or (d.amount_received and d.amount_received > 0):
+                if d.received_date and d.received_date >= first_this_month:
+                    received_this_month_amount += (d.amount_received or d.amount)
+                    received_this_month_count += 1
+        else:  # PAYABLE
+            if d.status in ["PENDING", "PARTIAL"]:
+                total_payable_amount += rem
+                total_payable_count += 1
+                if d.due_date < today:
+                    overdue_payable_amount += rem
+                    overdue_payable_count += 1
+            elif d.status in ["RECEIVED", "PAID", "SETTLED"] or (d.amount_received and d.amount_received > 0):
+                if d.received_date and d.received_date >= first_this_month:
+                    paid_this_month_amount += (d.amount_received or d.amount)
+                    paid_this_month_count += 1
 
     return UpcomingDueSummary(
         total_pending_amount=round(total_pending_amount, 2),
@@ -124,6 +151,12 @@ def get_upcoming_summary(
         overdue_count=overdue_count,
         received_this_month_amount=round(received_this_month_amount, 2),
         received_this_month_count=received_this_month_count,
+        total_payable_amount=round(total_payable_amount, 2),
+        total_payable_count=total_payable_count,
+        overdue_payable_amount=round(overdue_payable_amount, 2),
+        overdue_payable_count=overdue_payable_count,
+        paid_this_month_amount=round(paid_this_month_amount, 2),
+        paid_this_month_count=paid_this_month_count,
     )
 
 
@@ -154,18 +187,30 @@ def create_upcoming_due(
             db.flush()
             person_id = new_person.id
 
+    due_type = (due_in.due_type or "RECEIVABLE").upper()
+    default_desc = (
+        f"Money to receive from {due_in.person_name}"
+        if due_type == "RECEIVABLE"
+        else f"Pending transfer to {due_in.person_name}"
+    )
+
     due = UpcomingDue(
         user_id=current_user.id,
         person_id=person_id,
         person_name=due_in.person_name.strip(),
+        due_type=due_type,
         amount=round(due_in.amount, 2),
         amount_received=0.0,
         due_date=due_in.due_date or datetime.date.today(),
-        description=(due_in.description or f"Money to receive from {due_in.person_name}").strip(),
+        description=(due_in.description or default_desc).strip(),
         category_id=due_in.category_id,
         status="PENDING",
         notes=due_in.notes.strip() if due_in.notes else None,
     )
+    db.add(due)
+    db.commit()
+    db.refresh(due)
+    return format_due_response(due)
     db.add(due)
     db.commit()
     db.refresh(due)
@@ -188,12 +233,14 @@ def update_upcoming_due(
 
     if due_in.person_name is not None:
         due.person_name = due_in.person_name.strip()
+    if due_in.due_type is not None:
+        due.due_type = due_in.due_type.upper()
     if due_in.amount is not None:
         if due_in.amount <= 0:
             raise HTTPException(status_code=400, detail="Amount must be greater than zero")
         due.amount = round(due_in.amount, 2)
         if due.amount_received >= due.amount:
-            due.status = "RECEIVED"
+            due.status = "PAID" if due.due_type == "PAYABLE" else "RECEIVED"
         elif due.amount_received > 0:
             due.status = "PARTIAL"
         else:
@@ -262,47 +309,88 @@ def settle_upcoming_due(
         raise HTTPException(status_code=400, detail="Settlement amount must be greater than zero")
 
     settle_date = settle_in.received_date or datetime.date.today()
+    due_type = getattr(due, "due_type", "RECEIVABLE") or "RECEIVABLE"
 
-    # Find or use appropriate category (e.g. Borrowed Money, Refunds, or category_id from due)
-    cat_id = due.category_id
-    if not cat_id:
-        fallback_cat = db.query(Category).filter(
-            Category.user_id == current_user.id,
-            Category.type == "INCOME",
-            Category.name.in_(["Borrowed Money", "Refunds", "Other"])
-        ).first()
-        if fallback_cat:
-            cat_id = fallback_cat.id
+    if due_type == "PAYABLE":
+        # ⚠️ Check zero negative balance: bank balance cannot drop below 0
+        if bank.current_balance - settle_amt < 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Insufficient balance in {bank.name}. Available: ₹{bank.current_balance:,.2f}. Balance cannot go negative."
+            )
 
-    # 1. Create incoming transaction
-    txn = Transaction(
-        user_id=current_user.id,
-        transaction_type="INCOME",
-        amount=settle_amt,
-        bank_account_id=bank.id,
-        person_id=due.person_id,
-        category_id=cat_id,
-        transaction_date=settle_date,
-        payment_method=settle_in.payment_method or "UPI",
-        description=f"Received from {due.person_name}: {due.description}",
-        notes=settle_in.notes or f"Settlement for pending due #{due.id}"
-    )
-    db.add(txn)
-    db.flush()
+        # 1. Deduct amount from bank
+        bank.current_balance = round(bank.current_balance - settle_amt, 2)
 
-    # 2. Add amount to selected bank account
-    bank.current_balance = round(bank.current_balance + settle_amt, 2)
+        # Category for payable
+        cat_id = due.category_id
+        if not cat_id:
+            fallback_cat = db.query(Category).filter(
+                Category.user_id == current_user.id,
+                Category.type == "EXPENSE",
+                Category.name.in_(["Repayments", "Transfers", "Other"])
+            ).first()
+            if fallback_cat:
+                cat_id = fallback_cat.id
 
-    # 3. Update upcoming due record
-    due.amount_received = round((due.amount_received or 0.0) + settle_amt, 2)
-    due.received_date = settle_date
-    due.settled_bank_id = bank.id
-    due.settled_transaction_id = txn.id
+        # 2. Create outgoing EXPENSE transaction
+        txn = Transaction(
+            user_id=current_user.id,
+            transaction_type="EXPENSE",
+            amount=settle_amt,
+            bank_account_id=bank.id,
+            person_id=due.person_id,
+            category_id=cat_id,
+            transaction_date=settle_date,
+            payment_method=settle_in.payment_method or "UPI",
+            description=f"Paid to {due.person_name}: {due.description}",
+            notes=settle_in.notes or f"Settlement of pending payable #{due.id}"
+        )
+        db.add(txn)
+        db.flush()
 
-    if due.amount_received >= due.amount:
-        due.status = "RECEIVED"
+        due.amount_received = round((due.amount_received or 0.0) + settle_amt, 2)
+        due.received_date = settle_date
+        due.settled_bank_id = bank.id
+        due.settled_transaction_id = txn.id
+        due.status = "PAID" if due.amount_received >= due.amount else "PARTIAL"
+
     else:
-        due.status = "PARTIAL"
+        # RECEIVABLE: Add to bank and create INCOME transaction
+        bank.current_balance = round(bank.current_balance + settle_amt, 2)
+
+        cat_id = due.category_id
+        if not cat_id:
+            fallback_cat = db.query(Category).filter(
+                Category.user_id == current_user.id,
+                Category.type == "INCOME",
+                Category.name.in_(["Borrowed Money", "Refunds", "Other"])
+            ).first()
+            if fallback_cat:
+                cat_id = fallback_cat.id
+
+        # Create incoming transaction
+        txn = Transaction(
+            user_id=current_user.id,
+            transaction_type="INCOME",
+            amount=settle_amt,
+            bank_account_id=bank.id,
+            person_id=due.person_id,
+            category_id=cat_id,
+            transaction_date=settle_date,
+            payment_method=settle_in.payment_method or "UPI",
+            description=f"Received from {due.person_name}: {due.description}",
+            notes=settle_in.notes or f"Settlement for pending due #{due.id}"
+        )
+        db.add(txn)
+        db.flush()
+
+        # Update upcoming due record
+        due.amount_received = round((due.amount_received or 0.0) + settle_amt, 2)
+        due.received_date = settle_date
+        due.settled_bank_id = bank.id
+        due.settled_transaction_id = txn.id
+        due.status = "RECEIVED" if due.amount_received >= due.amount else "PARTIAL"
 
     db.commit()
     db.refresh(due)

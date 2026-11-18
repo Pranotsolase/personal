@@ -3,6 +3,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from sqlalchemy import text
 from app.config import settings
 from app.database import engine, Base, SessionLocal
 from app.routers import auth, banks, categories, people, transfers, transactions, budgets, analytics, upcoming
@@ -10,6 +11,14 @@ from app.seed import seed_demo_data
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
+
+# Auto-migrate columns if missing
+with engine.connect() as conn:
+    try:
+        conn.execute(text("ALTER TABLE upcoming_dues ADD COLUMN due_type VARCHAR(20) DEFAULT 'RECEIVABLE'"))
+        conn.commit()
+    except Exception:
+        pass
 
 # Auto seed default demo user if database is new
 try:
