@@ -125,7 +125,7 @@ def get_upcoming_summary(
             if d.status in ["PENDING", "PARTIAL"]:
                 total_pending_amount += rem
                 total_pending_count += 1
-                if d.due_date < today:
+                if d.due_date and d.due_date < today:
                     overdue_amount += rem
                     overdue_count += 1
             elif d.status in ["RECEIVED", "SETTLED"] or (d.amount_received and d.amount_received > 0):
@@ -136,7 +136,7 @@ def get_upcoming_summary(
             if d.status in ["PENDING", "PARTIAL"]:
                 total_payable_amount += rem
                 total_payable_count += 1
-                if d.due_date < today:
+                if d.due_date and d.due_date < today:
                     overdue_payable_amount += rem
                     overdue_payable_count += 1
             elif d.status in ["RECEIVED", "PAID", "SETTLED"] or (d.amount_received and d.amount_received > 0):

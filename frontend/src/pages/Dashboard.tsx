@@ -12,7 +12,8 @@ import {
   ChevronRight,
   Clock,
   Trash2,
-  Edit2
+  Edit2,
+  AlertCircle
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -47,10 +48,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [cashWallet, setCashWallet] = useState<BankAccount | null>(null);
   const [isEditingCash, setIsEditingCash] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   const loadData = async () => {
     try {
       setLoading(true);
+      setFetchError(null);
       const [dashRes, txnRes, cashRes] = await Promise.all([
         getDashboardData({ filter_type: dateFilter }),
         getTransactions({ limit: 6, sort_by: 'date', sort_order: 'desc' }),
@@ -59,8 +62,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
       setData(dashRes);
       setRecentTxns(txnRes);
       setCashWallet(cashRes);
-    } catch (e) {
+    } catch (e: any) {
       console.error('Error loading dashboard data', e);
+      setFetchError(e.response?.data?.detail || e.message || 'Failed to sync dashboard data');
     } finally {
       setLoading(false);
     }
@@ -93,6 +97,22 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   return (
     <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
+      {/* Fetch Error Alert */}
+      {fetchError && (
+        <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-center justify-between text-rose-800 text-xs shadow-xs">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            <span className="font-semibold">Dashboard synchronization notice: {fetchError}</span>
+          </div>
+          <button
+            onClick={loadData}
+            className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold transition cursor-pointer shadow-xs active:scale-95"
+          >
+            Retry Sync
+          </button>
+        </div>
+      )}
+
       {/* Dynamic Smart Insights Banner */}
       {data?.insights && data.insights.length > 0 && (
         <div className="bg-gradient-to-r from-indigo-50/90 via-sky-50/70 to-emerald-50/80 border border-indigo-100 rounded-2xl p-3.5 sm:p-4.5 shadow-xs flex items-start gap-3 sm:gap-3.5">

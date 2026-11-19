@@ -10,6 +10,7 @@ from app.auth import get_current_user
 router = APIRouter(prefix="/analytics", tags=["Analytics & Reports"])
 
 def get_date_range(filter_type: str, start_date: Optional[datetime.date] = None, end_date: Optional[datetime.date] = None):
+    import calendar
     today = datetime.date.today()
     if filter_type == "today":
         return today, today
@@ -21,14 +22,17 @@ def get_date_range(filter_type: str, start_date: Optional[datetime.date] = None,
     elif filter_type == "last_30_days":
         return today - datetime.timedelta(days=29), today
     elif filter_type == "this_month":
-        return today.replace(day=1), today
+        _, last_day = calendar.monthrange(today.year, today.month)
+        return today.replace(day=1), today.replace(day=last_day)
     elif filter_type == "last_month":
         first_this_month = today.replace(day=1)
         last_day_prev = first_this_month - datetime.timedelta(days=1)
         first_day_prev = last_day_prev.replace(day=1)
         return first_day_prev, last_day_prev
     elif filter_type == "this_year":
-        return datetime.date(today.year, 1, 1), today
+        return datetime.date(today.year, 1, 1), datetime.date(today.year, 12, 31)
+    elif filter_type == "all":
+        return None, None
     elif filter_type == "custom" and start_date and end_date:
         return start_date, end_date
     return None, None
@@ -189,12 +193,12 @@ def get_dashboard_data(
 
     pending_incoming_amount = round(sum(max(0.0, d.amount - (d.amount_received or 0.0)) for d in receivables), 2)
     pending_incoming_count = len(receivables)
-    overdue_receivables = [d for d in receivables if d.due_date < today]
+    overdue_receivables = [d for d in receivables if d.due_date and d.due_date < today]
     overdue_incoming_amount = round(sum(max(0.0, d.amount - (d.amount_received or 0.0)) for d in overdue_receivables), 2)
 
     pending_payable_amount = round(sum(max(0.0, d.amount - (d.amount_received or 0.0)) for d in payables), 2)
     pending_payable_count = len(payables)
-    overdue_payables = [d for d in payables if d.due_date < today]
+    overdue_payables = [d for d in payables if d.due_date and d.due_date < today]
     overdue_payable_amount = round(sum(max(0.0, d.amount - (d.amount_received or 0.0)) for d in overdue_payables), 2)
 
     # Generate smart financial insights
@@ -202,7 +206,7 @@ def get_dashboard_data(
     if overdue_payables:
         first_op = overdue_payables[0]
         insights.append(f"⚠️ Overdue Payment: ₹{max(0.0, first_op.amount - (first_op.amount_received or 0.0)):,.2f} is overdue to transfer to {first_op.person_name}.")
-    elif pending_payables:
+    elif payables:
         insights.append(f"Pending Transfers: You have ₹{pending_payable_amount:,.2f} pending to transfer to {pending_payable_count} {'person' if pending_payable_count == 1 else 'people'}.")
 
     if overdue_receivables:
@@ -250,6 +254,9 @@ def get_dashboard_data(
             "pending_incoming_amount": pending_incoming_amount,
             "pending_incoming_count": pending_incoming_count,
             "overdue_incoming_amount": overdue_incoming_amount,
+            "pending_payable_amount": pending_payable_amount,
+            "pending_payable_count": pending_payable_count,
+            "overdue_payable_amount": overdue_payable_amount,
         },
         "insights": insights,
         "charts": {
