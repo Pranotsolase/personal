@@ -34,6 +34,7 @@ const MainLayout: React.FC = () => {
 
   // Quick Modal States
   const [isAddBankOpen, setIsAddBankOpen] = useState(false);
+  const [addBankInitialType, setAddBankInitialType] = useState<'BANK' | 'CASH'>('BANK');
   const [isMoneySentOpen, setIsMoneySentOpen] = useState(false);
   const [isMoneyReceivedOpen, setIsMoneyReceivedOpen] = useState(false);
   const [isTransferOpen, setIsTransferOpen] = useState(false);
@@ -59,12 +60,18 @@ const MainLayout: React.FC = () => {
     );
   }
 
-  const handleOpenQuickModal = (type: 'sent' | 'received' | 'transfer' | 'bank', bankId?: number) => {
+  const handleOpenQuickModal = (type: 'sent' | 'received' | 'transfer' | 'bank' | 'cash', bankId?: number) => {
     setPreselectedBankId(bankId);
     if (type === 'sent') setIsMoneySentOpen(true);
     else if (type === 'received') setIsMoneyReceivedOpen(true);
     else if (type === 'transfer') setIsTransferOpen(true);
-    else if (type === 'bank') setIsAddBankOpen(true);
+    else if (type === 'bank') {
+      setAddBankInitialType('BANK');
+      setIsAddBankOpen(true);
+    } else if (type === 'cash') {
+      setAddBankInitialType('CASH');
+      setIsAddBankOpen(true);
+    }
   };
 
   const getPageTitle = (tab: NavItem) => {
@@ -134,7 +141,10 @@ const MainLayout: React.FC = () => {
 
           {currentTab === 'banks' && (
             <Banks
-              onOpenAddBank={() => setIsAddBankOpen(true)}
+              onOpenAddBank={(type) => {
+                setAddBankInitialType(type || 'BANK');
+                setIsAddBankOpen(true);
+              }}
               onOpenTransfer={(bankId) => handleOpenQuickModal('transfer', bankId)}
             />
           )}
@@ -176,6 +186,7 @@ const MainLayout: React.FC = () => {
         isOpen={isAddBankOpen}
         onClose={() => setIsAddBankOpen(false)}
         onSuccess={triggerRefresh}
+        initialType={addBankInitialType}
       />
 
       <MoneySentModal

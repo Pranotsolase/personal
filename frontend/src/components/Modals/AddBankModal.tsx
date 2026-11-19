@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { X, Building2, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Building2, Wallet, AlertCircle } from 'lucide-react';
 import { createBank } from '../../api/client';
 import { BankAccount } from '../../types';
 
@@ -7,12 +7,13 @@ interface AddBankModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  initialType?: 'BANK' | 'CASH';
 }
 
 const COLOR_OPTIONS = [
+  '#059669', // Emerald (Cash default)
   '#2563eb', // Blue
   '#0891b2', // Cyan
-  '#059669', // Emerald
   '#7c3aed', // Purple
   '#ea580c', // Orange
   '#dc2626', // Red
@@ -20,7 +21,13 @@ const COLOR_OPTIONS = [
   '#475569', // Slate
 ];
 
-export const AddBankModal: React.FC<AddBankModalProps> = ({ isOpen, onClose, onSuccess }) => {
+export const AddBankModal: React.FC<AddBankModalProps> = ({
+  isOpen,
+  onClose,
+  onSuccess,
+  initialType = 'BANK',
+}) => {
+  const [mode, setMode] = useState<'BANK' | 'CASH'>(initialType);
   const [name, setName] = useState('');
   const [accountHolderName, setAccountHolderName] = useState('');
   const [accountType, setAccountType] = useState<BankAccount['account_type']>('SAVINGS');
@@ -33,12 +40,54 @@ export const AddBankModal: React.FC<AddBankModalProps> = ({ isOpen, onClose, onS
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (isOpen) {
+      setMode(initialType);
+      setError(null);
+      if (initialType === 'CASH') {
+        setName('Cash in Hand');
+        setAccountHolderName('Cash in Hand');
+        setAccountType('CASH');
+        setColor('#059669');
+        setOpeningBalance(0);
+        setCurrentBalance(0);
+      } else {
+        setName('');
+        setAccountHolderName('');
+        setAccountType('SAVINGS');
+        setColor('#2563eb');
+        setOpeningBalance(0);
+        setCurrentBalance(0);
+      }
+    }
+  }, [isOpen, initialType]);
+
+  const switchMode = (newMode: 'BANK' | 'CASH') => {
+    setMode(newMode);
+    setError(null);
+    if (newMode === 'CASH') {
+      setName('Cash in Hand');
+      setAccountHolderName('Cash in Hand');
+      setAccountType('CASH');
+      setColor('#059669');
+    } else {
+      setName('');
+      setAccountHolderName('');
+      setAccountType('SAVINGS');
+      setColor('#2563eb');
+    }
+  };
+
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !accountHolderName.trim()) {
-      setError('Please provide Bank Name and Account Holder Name');
+    if (!name.trim()) {
+      setError(mode === 'CASH' ? 'Please provide a name for your Cash Wallet' : 'Please provide Bank Name');
+      return;
+    }
+    if (mode === 'BANK' && !accountHolderName.trim()) {
+      setError('Please provide Account Holder Name');
       return;
     }
 
@@ -47,10 +96,10 @@ export const AddBankModal: React.FC<AddBankModalProps> = ({ isOpen, onClose, onS
       setError(null);
       await createBank({
         name: name.trim(),
-        account_holder_name: accountHolderName.trim(),
-        account_type: accountType,
-        account_number_masked: accountNumber.trim() ? `•••• ${accountNumber.trim().slice(-4)}` : undefined,
-        ifsc_code: ifscCode.trim() ? ifscCode.trim().toUpperCase() : undefined,
+        account_holder_name: mode === 'CASH' ? (accountHolderName.trim() || 'Cash in Hand') : accountHolderName.trim(),
+        account_type: mode === 'CASH' ? 'CASH' : accountType,
+        account_number_masked: mode === 'BANK' && accountNumber.trim() ? `•••• ${accountNumber.trim().slice(-4)}` : undefined,
+        ifsc_code: mode === 'BANK' && ifscCode.trim() ? ifscCode.trim().toUpperCase() : undefined,
         opening_balance: Number(openingBalance) || 0,
         current_balance: currentBalance !== '' ? Number(currentBalance) : (Number(openingBalance) || 0),
         color,
@@ -60,7 +109,7 @@ export const AddBankModal: React.FC<AddBankModalProps> = ({ isOpen, onClose, onS
       onSuccess();
       onClose();
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to create bank account');
+      setError(err.response?.data?.detail || 'Failed to create account');
     } finally {
       setLoading(false);
     }
@@ -70,22 +119,58 @@ export const AddBankModal: React.FC<AddBankModalProps> = ({ isOpen, onClose, onS
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-fade-in">
       <div className="bg-white border border-slate-200 w-full max-w-lg rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Modal Header */}
-        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+        <div className={`px-6 py-4 border-b border-slate-200 flex items-center justify-between ${
+          mode === 'CASH' ? 'bg-emerald-50/70' : 'bg-slate-50'
+        }`}>
           <div className="flex items-center space-x-3">
-            <div className="p-2 rounded-xl bg-indigo-100 text-indigo-700">
-              <Building2 className="w-5 h-5" />
+            <div className={`p-2 rounded-xl ${
+              mode === 'CASH' ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-100 text-indigo-700'
+            }`}>
+              {mode === 'CASH' ? <Wallet className="w-5 h-5" /> : <Building2 className="w-5 h-5" />}
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-900">Add Bank Account</h2>
-              <p className="text-xs text-slate-500">Add a savings, current, wallet or cash account</p>
+              <h2 className="text-base font-bold text-slate-900">
+                {mode === 'CASH' ? 'Add Cash Wallet' : 'Add Bank Account'}
+              </h2>
+              <p className="text-xs text-slate-500">
+                {mode === 'CASH'
+                  ? 'Track physical cash in your pocket or wallet directly'
+                  : 'Add a savings, current, or business bank account'}
+              </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-200/60"
+            className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-200/60 cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
+        </div>
+
+        {/* Mode Toggle Switcher */}
+        <div className="px-6 pt-4 pb-1">
+          <div className="grid grid-cols-2 p-1 bg-slate-100 rounded-xl gap-1">
+            <button
+              type="button"
+              onClick={() => switchMode('BANK')}
+              className={`py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                mode === 'BANK' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Building2 className="w-3.5 h-3.5" />
+              <span>Bank Account</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => switchMode('CASH')}
+              className={`py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                mode === 'CASH' ? 'bg-white text-emerald-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Wallet className="w-3.5 h-3.5" />
+              <span>💵 Cash Wallet</span>
+            </button>
+          </div>
         </div>
 
         {/* Modal Body */}
@@ -97,123 +182,170 @@ export const AddBankModal: React.FC<AddBankModalProps> = ({ isOpen, onClose, onS
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Bank / Account Name *
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. HDFC Salary, SBI Savings"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-                className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500"
-              />
-            </div>
+          {mode === 'CASH' ? (
+            /* Cash Wallet Specific Inputs */
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Wallet / Cash Label *
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Cash in Hand, Pocket Cash, Home Safe"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-500 font-medium"
+                />
+              </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Account Holder Name *
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. Pranoy Roy"
-                value={accountHolderName}
-                onChange={(e) => setAccountHolderName(e.target.value)}
-                required
-                className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500"
-              />
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Current Cash in Hand (₹) *
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-2.5 text-slate-400 font-bold text-base">₹</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0.00"
+                    value={currentBalance}
+                    onChange={(e) => {
+                      const val = e.target.value === '' ? '' : parseFloat(e.target.value);
+                      setCurrentBalance(val);
+                      setOpeningBalance(val);
+                    }}
+                    required
+                    className="w-full bg-white border border-slate-300 rounded-xl pl-8 pr-3 py-2 text-lg text-slate-900 font-black placeholder-slate-400 focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  You can directly edit this cash amount anytime when counting cash.
+                </p>
+              </div>
             </div>
-          </div>
+          ) : (
+            /* Bank Account Specific Inputs */
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Bank / Account Name *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. HDFC Salary, SBI Savings"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    required
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Account Type
-              </label>
-              <select
-                value={accountType}
-                onChange={(e) => setAccountType(e.target.value as any)}
-                className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer font-medium"
-              >
-                <option value="SAVINGS">Savings Account</option>
-                <option value="CURRENT">Current Account</option>
-                <option value="CASH">Cash in Hand</option>
-                <option value="WALLET">Digital Wallet (Paytm/Amazon)</option>
-                <option value="OTHER">Other</option>
-              </select>
-            </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Account Holder Name *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Pranoy Roy"
+                    value={accountHolderName}
+                    onChange={(e) => setAccountHolderName(e.target.value)}
+                    required
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Account Number (Last 4 digits)
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. 4892 (Stored masked)"
-                value={accountNumber}
-                onChange={(e) => setAccountNumber(e.target.value)}
-                maxLength={20}
-                className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500"
-              />
-            </div>
-          </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Account Type
+                  </label>
+                  <select
+                    value={accountType}
+                    onChange={(e) => setAccountType(e.target.value as any)}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer font-medium"
+                  >
+                    <option value="SAVINGS">Savings Account</option>
+                    <option value="CURRENT">Current Account</option>
+                    <option value="WALLET">Digital Wallet (Paytm/Amazon)</option>
+                    <option value="OTHER">Other</option>
+                  </select>
+                </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                IFSC Code (optional)
-              </label>
-              <input
-                type="text"
-                placeholder="HDFC0001234"
-                value={ifscCode}
-                onChange={(e) => setIfscCode(e.target.value)}
-                maxLength={11}
-                className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500 uppercase"
-              />
-            </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Account Number (Last 4 digits)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 4892 (Stored masked)"
+                    value={accountNumber}
+                    onChange={(e) => setAccountNumber(e.target.value)}
+                    maxLength={20}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Opening Balance (₹)
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                placeholder="0.00"
-                value={openingBalance}
-                onChange={(e) => {
-                  const val = e.target.value === '' ? '' : parseFloat(e.target.value);
-                  setOpeningBalance(val);
-                  if (currentBalance === 0 || currentBalance === '') {
-                    setCurrentBalance(val);
-                  }
-                }}
-                className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500"
-              />
-            </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    IFSC Code (optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="HDFC0001234"
+                    value={ifscCode}
+                    onChange={(e) => setIfscCode(e.target.value)}
+                    maxLength={11}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500 uppercase"
+                  />
+                </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Current Balance (₹)
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                placeholder="0.00"
-                value={currentBalance}
-                onChange={(e) => setCurrentBalance(e.target.value === '' ? '' : parseFloat(e.target.value))}
-                className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500 font-bold"
-              />
-            </div>
-          </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Opening Balance (₹)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={openingBalance}
+                    onChange={(e) => {
+                      const val = e.target.value === '' ? '' : parseFloat(e.target.value);
+                      setOpeningBalance(val);
+                      if (currentBalance === 0 || currentBalance === '') {
+                        setCurrentBalance(val);
+                      }
+                    }}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Current Balance (₹)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={currentBalance}
+                    onChange={(e) => setCurrentBalance(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500 font-bold"
+                  />
+                </div>
+              </div>
+            </>
+          )}
 
           {/* Color tag */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-              Account Badge Color
+              Badge Color
             </label>
             <div className="flex items-center gap-3">
               {COLOR_OPTIONS.map((c) => (
@@ -235,7 +367,11 @@ export const AddBankModal: React.FC<AddBankModalProps> = ({ isOpen, onClose, onS
               Notes
             </label>
             <textarea
-              placeholder="e.g. Primary salary account, linked with credit card"
+              placeholder={
+                mode === 'CASH'
+                  ? 'e.g. Physical cash in wallet, safe, or emergency cash'
+                  : 'e.g. Primary salary account, linked with credit card'
+              }
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
@@ -254,9 +390,17 @@ export const AddBankModal: React.FC<AddBankModalProps> = ({ isOpen, onClose, onS
             <button
               type="submit"
               disabled={loading}
-              className="px-5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition shadow-md shadow-indigo-600/20 cursor-pointer disabled:opacity-50"
+              className={`px-5 py-2.5 rounded-xl text-xs font-bold text-white transition shadow-md cursor-pointer disabled:opacity-50 ${
+                mode === 'CASH'
+                  ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/20'
+                  : 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-600/20'
+              }`}
             >
-              {loading ? 'Adding Account...' : 'Save Bank Account'}
+              {loading
+                ? 'Saving...'
+                : mode === 'CASH'
+                ? 'Create Cash Wallet'
+                : 'Save Bank Account'}
             </button>
           </div>
         </form>

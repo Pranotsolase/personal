@@ -11,7 +11,8 @@ import {
   Lightbulb,
   ChevronRight,
   Clock,
-  Trash2
+  Trash2,
+  Edit2
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -25,13 +26,14 @@ import {
   Tooltip,
   CartesianGrid
 } from 'recharts';
-import { getDashboardData, getTransactions, deleteTransaction } from '../api/client';
-import { DashboardData, Transaction } from '../types';
+import { getDashboardData, getTransactions, deleteTransaction, getCashWallet } from '../api/client';
+import { DashboardData, Transaction, BankAccount } from '../types';
 import { formatCurrency, formatDate } from '../utils/format';
+import { EditCashBalanceModal } from '../components/Modals/EditCashBalanceModal';
 
 interface DashboardProps {
   dateFilter: string;
-  onOpenQuickModal: (type: 'sent' | 'received' | 'transfer' | 'bank') => void;
+  onOpenQuickModal: (type: 'sent' | 'received' | 'transfer' | 'bank' | 'cash') => void;
   onNavigateTab: (tab: any) => void;
 }
 
@@ -42,17 +44,21 @@ export const Dashboard: React.FC<DashboardProps> = ({
 }) => {
   const [data, setData] = useState<DashboardData | null>(null);
   const [recentTxns, setRecentTxns] = useState<Transaction[]>([]);
+  const [cashWallet, setCashWallet] = useState<BankAccount | null>(null);
+  const [isEditingCash, setIsEditingCash] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const loadData = async () => {
     try {
       setLoading(true);
-      const [dashRes, txnRes] = await Promise.all([
+      const [dashRes, txnRes, cashRes] = await Promise.all([
         getDashboardData({ filter_type: dateFilter }),
         getTransactions({ limit: 6, sort_by: 'date', sort_order: 'desc' }),
+        getCashWallet().catch(() => null),
       ]);
       setData(dashRes);
       setRecentTxns(txnRes);
+      setCashWallet(cashRes);
     } catch (e) {
       console.error('Error loading dashboard data', e);
     } finally {
@@ -174,6 +180,66 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </button>
         </div>
       )}
+
+      {/* Cash Wallet (Physical Cash in Hand) Banner */}
+      <div className="bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-emerald-500/10 border border-emerald-200/90 rounded-2xl p-3.5 sm:p-4.5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center space-x-3.5">
+          <div className="p-2.5 rounded-xl bg-emerald-600 text-white shadow-xs shrink-0">
+            <Wallet className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">
+                💵 Cash Wallet (Cash in Hand)
+              </span>
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                Directly Editable
+              </span>
+            </div>
+            {cashWallet ? (
+              <div className="flex items-baseline gap-2 mt-0.5">
+                <span className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+                  {formatCurrency(cashWallet.current_balance)}
+                </span>
+                <span className="text-xs text-slate-500 font-medium">({cashWallet.name})</span>
+              </div>
+            ) : (
+              <p className="text-xs text-slate-600 mt-0.5">
+                No cash wallet added yet. Track physical cash notes in your pocket directly.
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+          {cashWallet ? (
+            <>
+              <button
+                onClick={() => setIsEditingCash(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-xs cursor-pointer active:scale-98"
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+                <span>Edit Cash Balance</span>
+              </button>
+              <button
+                onClick={() => onNavigateTab('banks')}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold border border-slate-200 transition cursor-pointer"
+              >
+                <span>Accounts</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => onOpenQuickModal('cash')}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-xs cursor-pointer active:scale-98"
+            >
+              <span>+ Add Cash Wallet</span>
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      </div>
 
       {/* 6 Key Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2.5 sm:gap-4">
@@ -592,6 +658,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Edit Cash Balance Modal */}
+      {cashWallet && (
+        <EditCashBalanceModal
+          isOpen={isEditingCash}
+          onClose={() => setIsEditingCash(false)}
+          onSuccess={loadData}
+          account={cashWallet}
+        />
+      )}
     </div>
   );
 };

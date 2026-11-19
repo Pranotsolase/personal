@@ -35,7 +35,7 @@ class TokenData(BaseModel):
 # --- Bank Account Schemas ---
 class BankAccountBase(BaseModel):
     name: str
-    account_holder_name: str
+    account_holder_name: Optional[str] = "Self"
     account_type: str = "SAVINGS"
     account_number_masked: Optional[str] = None
     ifsc_code: Optional[str] = None

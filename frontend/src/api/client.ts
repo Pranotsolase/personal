@@ -49,8 +49,10 @@ export const resetToZero = () => api.post('/auth/reset-zero').then((r) => r.data
 // Banks API
 export const getBanks = () => api.get<BankAccount[]>('/banks/').then((r) => r.data);
 export const getBanksSummary = () => api.get('/banks/summary').then((r) => r.data);
+export const getCashWallet = () => api.get<BankAccount | null>('/banks/cash-wallet').then((r) => r.data);
 export const createBank = (data: Partial<BankAccount>) => api.post<BankAccount>('/banks/', data).then((r) => r.data);
 export const updateBank = (id: number, data: Partial<BankAccount>) => api.put<BankAccount>(`/banks/${id}`, data).then((r) => r.data);
+export const updateDirectBalance = (id: number, balance: number) => api.put<BankAccount>(`/banks/${id}/balance`, { balance }).then((r) => r.data);
 export const deleteBank = (id: number, hard = false) => api.delete(`/banks/${id}?hard_delete=${hard}`).then((r) => r.data);
 export const recalculateBankBalance = (id: number) => api.post(`/banks/${id}/recalculate`).then((r) => r.data);
 export const getBankTransactions = (id: number) => api.get<Transaction[]>(`/banks/${id}/transactions`).then((r) => r.data);
